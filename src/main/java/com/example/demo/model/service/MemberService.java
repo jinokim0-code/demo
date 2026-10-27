@@ -20,6 +20,11 @@ public class MemberService implements UserDetailsService { // 로그인을 위�
     private PasswordEncoder passwordEncoder;
 
     public Member signup(MemberForm form) { // 회원가입
+        // [연습문제 ②] 비밀번호 확인 검증 : 다르면 저장하지 않고 예외 발생
+        if (form.getPassword() == null
+                || !form.getPassword().equals(form.getPasswordConfirm())) {
+            throw new IllegalArgumentException("비밀번호가 일치하지 않습니다.");
+        }
         if (memberRepository.existsByUsername(form.getUsername())) {
             throw new IllegalArgumentException("이미 사용 중인 아이디입니다.");
         }
