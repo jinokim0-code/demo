@@ -29,6 +29,11 @@ public class AdminController {
         return "admin/members"; // templates/admin/members.html (폴더 포함)
     }
 
+    @GetMapping("/members-api") // [7주차] GET /admin/members-api : API 버전 화면 (데이터는 fetch 로 가져옴)
+    public String membersApi() {
+        return "admin/members-api"; // templates/admin/members-api.html
+    }
+
     @PostMapping("/members/{id}/role") // POST /admin/members/3/role
     public String changeRole(@PathVariable Long id, @RequestParam String role,
             RedirectAttributes redirect) {

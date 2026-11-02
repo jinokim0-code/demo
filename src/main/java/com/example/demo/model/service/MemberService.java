@@ -1,6 +1,7 @@
 package com.example.demo.model.service;
 
 import java.util.List;
+import java.util.Optional;
 
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -25,7 +26,12 @@ public class MemberService implements UserDetailsService { // 로그인을 위�
     private PasswordEncoder passwordEncoder;
 
     public Member signup(MemberForm form) { // 회원가입
-        // [연습문제 ②] 비밀번호 확인 검증 : 다르면 저장하지 않고 예외 발생
+        // [7주차] 빈 값 검사 : JSON 으로는 필드를 빼고 보낼 수 있다
+        if (form.getUsername() == null || form.getUsername().isBlank()
+                || form.getPassword() == null || form.getPassword().isBlank()
+                || form.getName() == null || form.getName().isBlank()) {
+            throw new IllegalArgumentException("아이디, 비밀번호, 이름은 필수입니다.");
+        }
         if (form.getPassword() == null
                 || !form.getPassword().equals(form.getPasswordConfirm())) {
             throw new IllegalArgumentException("비밀번호가 일치하지 않습니다.");
@@ -66,34 +72,48 @@ public class MemberService implements UserDetailsService { // 로그인을 위�
         return memberRepository.findAll(Sort.by("id"));
     }
 
-    // 관리자가 부여할 수 있는 권한 (화면에서 넘어온 값을 그대로 믿지 않는다)
-    private static final List<String> ROLES = List.of("USER", "MANAGER", "ADMIN"); // [연습②] MANAGER 추가
+    // [연습①] 검색어가 없으면 전체, 있으면 아이디·이름에 포함된 회원
+    public List<Member> search(String keyword) {
+        if (keyword == null || keyword.isBlank()) {
+            return findAll();
+        }
+        String k = keyword.trim();
+        return memberRepository.findByUsernameContainingOrNameContainingOrderByIdAsc(k, k);
+    }
 
-    // [연습①] 로그인한 사용자 본인이 대상이면 거부 : 관리자 0명 방지
+    // [7주차] 번호로 회원 1명 조회 (없으면 빈 Optional → 컨트롤러가 404 처리)
+    public Optional<Member> findById(Long id) {
+        return memberRepository.findById(id);
+    }
+
+    // 관리자가 부여할 수 있는 권한 (화면에서 넘어온 값을 그대로 믿지 않는다)
+    private static final List<String> ROLES = List.of("USER", "MANAGER", "ADMIN");
+
+    // 자기 자신의 권한 변경·삭제 금지
     private void checkNotSelf(Member target) {
-        String me = SecurityContextHolder.getContext().getAuthentication().getName(); // 로그인 아이디
+        String me = SecurityContextHolder.getContext().getAuthentication().getName();
         if (target.getUsername().equals(me)) {
             throw new IllegalArgumentException("자기 자신의 권한 변경·삭제는 할 수 없습니다.");
         }
     }
 
     @PreAuthorize("hasRole('ADMIN')") // 관리자만 실행 가능 (2차 잠금)
-    public void changeRole(Long id, String role) { // 권한 변경
+    public Member changeRole(Long id, String role) { // 권한 변경 → [7주차] 변경된 회원 반환
         if (!ROLES.contains(role)) { // 허용된 권한만
             throw new IllegalArgumentException("허용되지 않는 권한입니다 : " + role);
         }
         Member member = memberRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("회원이 존재하지 않습니다."));
-        checkNotSelf(member); // [연습①] 본인이면 여기서 거부
+        checkNotSelf(member);
         member.setRole(role);
-        memberRepository.save(member); // UPDATE (id 가 있으면 수정)
+        return memberRepository.save(member); // UPDATE (id 가 있으면 수정)
     }
 
     @PreAuthorize("hasRole('ADMIN')") // 관리자만 실행 가능 (2차 잠금)
     public void deleteMember(Long id) { // 회원 삭제
         Member member = memberRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("회원이 존재하지 않습니다."));
-        checkNotSelf(member); // [연습①] 본인이면 여기서 거부
+        checkNotSelf(member);
         memberRepository.delete(member); // DELETE
     }
 }
