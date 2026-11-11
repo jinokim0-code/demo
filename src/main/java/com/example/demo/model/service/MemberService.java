@@ -16,6 +16,8 @@ import org.springframework.stereotype.Service;
 import com.example.demo.model.domain.Member;
 import com.example.demo.model.dto.MemberForm;
 import com.example.demo.model.repository.MemberRepository;
+import com.example.demo.model.repository.PostRepository;
+import com.example.demo.model.repository.CommentRepository;
 
 @Service // 서비스 등록
 public class MemberService implements UserDetailsService { // 로그인을 위한 인터페이스 제공
@@ -24,6 +26,10 @@ public class MemberService implements UserDetailsService { // 로그인을 위�
 
     @Autowired // SecurityConfig 에 등록한 BCryptPasswordEncoder 주입
     private PasswordEncoder passwordEncoder;
+    @Autowired // ① 필드 추가
+    private PostRepository postRepository;
+    @Autowired
+    private CommentRepository commentRepository;
 
     public Member signup(MemberForm form) { // 회원가입
         // [7주차] 빈 값 검사 : JSON 으로는 필드를 빼고 보낼 수 있다
@@ -114,6 +120,10 @@ public class MemberService implements UserDetailsService { // 로그인을 위�
         Member member = memberRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("회원이 존재하지 않습니다."));
         checkNotSelf(member);
+        if (postRepository.existsByAuthor(member) || commentRepository.existsByAuthor(member)) {
+            throw new IllegalArgumentException("작성한 글이나 댓글이 있는 회원은 삭제할 수 없습니다.");
+        }
+
         memberRepository.delete(member); // DELETE
     }
 }
