@@ -1,8 +1,11 @@
 package com.example.demo.model.service;
 
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.List;
+
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
@@ -18,15 +21,14 @@ import com.example.demo.model.dto.PostForm;
 import com.example.demo.model.repository.MemberRepository;
 import com.example.demo.model.repository.PostRepository;
 
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-
 @Service // 게시판 서비스
 public class PostService {
     @Autowired
     private PostRepository postRepository;
     @Autowired
     private MemberRepository memberRepository;
+    @Autowired
+    private FileStore fileStore; // [11주차] 포스터 저장
 
     public List<Post> findAll() { // 전체 목록 (최신 글이 위로)
         return postRepository.findAll(Sort.by(Sort.Direction.DESC, "id"));
@@ -45,10 +47,15 @@ public class PostService {
         post.setContent(form.getContent());
         post.setAuthor(author); // 작성자는 화면이 아니라 서버가 정한다
         post.setCreatedAt(LocalDateTime.now());
+        post.setCapacity(form.getCapacity()); // [11주차] null 이면 일반 글
+        post.setPosterFile(fileStore.save(form.getPoster())); // [11주차] 파일이 없으면 null
         return postRepository.save(post); // INSERT
     }
 
-    private void validate(PostForm form) { // 빈 값 검사 (5주차 회원가입과 같은 방식)
+    private void validate(PostForm form) { // 입력 검사
+        if (form.getCapacity() != null && (form.getCapacity() < 1 || form.getCapacity() > 100)) {
+            throw new IllegalArgumentException("모집 인원은 1~100명으로 입력하세요.");
+        }
         if (form.getTitle() == null || form.getTitle().isBlank()
                 || form.getContent() == null || form.getContent().isBlank()) {
             throw new IllegalArgumentException("제목과 내용을 모두 입력하세요.");
@@ -59,15 +66,19 @@ public class PostService {
     }
 
     public static final int PAGE_SIZE = 10; // 한 페이지에 보여 줄 글 수
-    // [10주차] 단계 1 : 페이지 목록 (page 는 0 부터)
 
-    // [10주차] 단계 2 : 페이지 목록 + 검색 (검색어가 없으면 전체)
+    // [10주차] 페이지 목록 + 검색 (검색어가 없으면 전체)
     public Page<Post> findPage(String keyword, int page) {
         PageRequest pageable = PageRequest.of(Math.max(page, 0), PAGE_SIZE, Sort.by(Sort.Direction.DESC, "id"));
         if (keyword == null || keyword.isBlank()) { // 앞이 true면 뒤를 실행하지 않음
             return postRepository.findAll(pageable);
         }
         return postRepository.search(keyword.trim(), pageable); // 검색 결과도 10개씩
+    }
+
+    // [11주차] 단계 3 : 바구니에 담긴 글들 (번호 목록으로 한 번에)
+    public List<Post> findAllById(Collection<Long> ids) {
+        return postRepository.findAllById(ids); // SELECT ... WHERE id IN (?, ?, ?)
     }
 
     public Post findById(Long id) { // 글 1개 (없으면 404 → templates/error/404.html)
@@ -83,7 +94,7 @@ public class PostService {
 
     public Post findForEdit(Long id) { // 수정 화면에 보여 줄 글
         Post post = findById(id);
-        checkWriter(post); // ★ 추가
+        checkWriter(post);
         return post;
     }
 
@@ -99,7 +110,7 @@ public class PostService {
     public void delete(Long id) { // 글 삭제
         Post post = findById(id);
         if (!isAdmin())
-            checkWriter(post); // ★ 추가 : 관리자는 누구 글이든 삭제 가능
+            checkWriter(post); // 관리자는 누구 글이든 삭제 가능
         postRepository.delete(post); // DELETE
     }
 
@@ -114,5 +125,4 @@ public class PostService {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         return auth.getAuthorities().stream().anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
     }
-
 }
